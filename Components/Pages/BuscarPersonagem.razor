@@ -1,0 +1,144 @@
+@page "/"
+@page "/personagem"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using BlazorDbzPersonagem.Models
+@using BlazorDbzPersonagem.Services
+@inject DragonBallApiService Api
+@implements IDisposable
+
+<PageTitle>Personagem Dragon Ball</PageTitle>
+
+<h1>Buscar Personagem</h1>
+
+<EditForm Model="formulario" OnValidSubmit="BuscarAsync" FormName="busca-personagem" class="mb-4">
+    <DataAnnotationsValidator />
+
+    <div class="row g-2 align-items-end">
+        <div class="col-auto">
+            <label for="idPersonagem" class="form-label">Id do personagem</label>
+            <InputNumber id="idPersonagem" class="form-control" @bind-Value="formulario.Id" />
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary" disabled="@carregando">
+                @(carregando ? "Buscando..." : "Buscar")
+            </button>
+        </div>
+    </div>
+
+    <ValidationMessage For="() => formulario.Id" class="text-danger mt-1" />
+</EditForm>
+
+@if (mensagemErro is not null)
+{
+    <div class="alert alert-danger" role="alert">@mensagemErro</div>
+}
+else if (personagem is not null)
+{
+    <div class="card" style="max-width: 40rem;">
+        <div class="card-body">
+            <div class="d-flex gap-3">
+                @if (!string.IsNullOrWhiteSpace(personagem.Image))
+                {
+                    <img src="@personagem.Image" alt="@personagem.Name" class="personagem-img" />
+                }
+                <dl class="mb-0">
+                    <dt>Nome</dt>
+                    <dd>@personagem.Name</dd>
+
+                    <dt>Planeta</dt>
+                    <dd>
+                        @(personagem.OriginPlanet?.Name ?? "Não informado")
+                        @if (personagem.OriginPlanet?.IsDestroyed == true)
+                        {
+                            <span class="badge bg-secondary ms-1">destruído</span>
+                        }
+                    </dd>
+
+                    <dt>Transformações</dt>
+                    <dd>
+                        @if (personagem.Transformations is not { Count: > 0 })
+                        {
+                            <span>Nenhuma transformação</span>
+                        }
+                        else
+                        {
+                            <ul class="mb-0 ps-3">
+                                @foreach (var transformacao in personagem.Transformations)
+                                {
+                                    <li @key="transformacao.Id">@transformacao.Name</li>
+                                }
+                            </ul>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly FormularioBusca formulario = new();
+    private Personagem? personagem;
+    private string? mensagemErro;
+    private bool carregando;
+
+    // Cancela a requisição anterior se o usuário buscar de novo antes da resposta,
+    // evitando que uma resposta atrasada sobrescreva o resultado mais recente.
+    private CancellationTokenSource? cts;
+
+    private async Task BuscarAsync()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
+        cts = new CancellationTokenSource();
+        var token = cts.Token;
+
+        carregando = true;
+        mensagemErro = null;
+        personagem = null;
+
+        try
+        {
+            var id = formulario.Id!.Value;
+            var resultado = await Api.ObterPersonagemAsync(id, token);
+
+            if (resultado is null)
+            {
+                mensagemErro = $"Nenhum personagem encontrado com o id {id}.";
+            }
+            else
+            {
+                personagem = resultado;
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (DragonBallApiException ex)
+        {
+            mensagemErro = ex.Message;
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                carregando = false;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
+    }
+
+    private sealed class FormularioBusca
+    {
+        [Required(ErrorMessage = "Informe o id do personagem.")]
+        [Range(1, 10_000, ErrorMessage = "O id deve ser um número entre 1 e 10000.")]
+        public int? Id { get; set; } = 1;
+    }
+}

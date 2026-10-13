@@ -1,0 +1,14 @@
+.personagem-img {
+    width: 140px;
+    height: 220px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+dt {
+    margin-top: 0.5rem;
+}
+
+    dt:first-of-type {
+        margin-top: 0;
+    }
